@@ -52,6 +52,11 @@ lee::PandoraLEEAnalyzer::PandoraLEEAnalyzer(fhicl::ParameterSet const &pset)
   myTTree->Branch("nu_matched_showers", &_nu_matched_showers,
                   "nu_matched_showers/i");
 
+  myTTree->Branch("true_shower_E_dep", &_true_shower_E_dep, 
+		  "true_shower_E_dep/d");
+  myTTree->Branch("true_shower_E_dep_fiducial", &_true_shower_E_dep_fiducial, 
+		  "true_shower_E_dep_fiducial/d");
+
   myTTree->Branch("nu_daughters_pdg", "std::vector< int >", &_nu_daughters_pdg);
   myTTree->Branch("nu_daughters_E", "std::vector< double >", &_nu_daughters_E);
 
@@ -218,7 +223,47 @@ art::Ptr<recob::Track> lee::PandoraLEEAnalyzer::get_longest_track(
   return longest_track;
 }
 
+void lee::PandoraLEEAnalyzer::get_true_energy_dep_daughters(simb::MCParticle& mcparticle, std::vector<double>& energy_dep) {
+  double Bounds[] = {0.0, -116.5, 0.0, 256.35, 116.5, 1036.8};
+  double ReverseOdering[] = {0.0, 0.0, 0.0};
 
+  std::vector<double> ParticleEndPoints;
+  std::vector<double> IntersectParams;
+
+  ParticleEndPoints.push_back(mcparticle.Vx());
+  ParticleEndPoints.push_back(mcparticle.Vy());
+  ParticleEndPoints.push_back(mcparticle.Vz());
+  ParticleEndPoints.push_back(mcparticle.EndX());
+  ParticleEndPoints.push_back(mcparticle.EndY());
+  ParticleEndPoints.push_back(mcparticle.EndZ());
+  
+  // Parameterize mcparticle by line and get parameter of entering/exiting fid vol in each dimension
+  for (Int_t i=0; i<6; i++)
+    IntersectParams.push_back((Bounds[i]-ParticleEndPoints.at(i%3)) / (ParticleEndPoints.at(i%3+3)-ParticleEndPoints.at(i%3)));
+  
+  for (Int_t i=0; i<3; i++) {
+    if (ParticleEndPoints.at(i) > ParticleEndPoints.at(i+3))
+      ReverseOrdering[i] = 1.0;
+  }
+  
+  // Get min/max linear parameter between 0 and 1
+  double ParticleParamStart = 0.0;
+  double ParticleParamEnd = 1.0;
+  for (Int_t i=0; i<3; i++) {
+    if (IntersectParams.at(i + ReverseOrder.at(i)*3) > ParicleParamStart)
+      ParticleParamStart = IntersectParams.at(i + ReverseOrder.at(i)*3);	
+    if (IntersectParams.at(i + 3 - ReverseOrder.at(i)*3) < ParicleParamEnd)
+      ParticleParamEnd = IntersectParams.at(i + 3 - ReverseOrder.at(i)*3);
+  }
+
+  double EnergyDeposited = mcparticle.E() - mcparticle.EndE();
+  energy_dep.at(0) += EnergyDeposited;
+  if (ParticleParamStart < 1.0 && ParticleParamEnd > 0.0)
+    energy_dep.at(1) += EnergyDeposited * (ParticleParamEnd-ParticleParamStart);
+
+  for (Int_t i_daughter = 0; i_daughter < mcparticle.NumberDaughters(); i_daughter++)
+    get_true_energy_dep_daughters(mcparticle.Daughter(i_daughter), energy_dep); 
+}
 
 
 
@@ -355,6 +400,9 @@ void lee::PandoraLEEAnalyzer::clear() {
   _true_vx_sce = std::numeric_limits<double>::lowest();
   _true_vy_sce = std::numeric_limits<double>::lowest();
   _true_vz_sce = std::numeric_limits<double>::lowest();
+
+  _true_shower_E_dep = stf::numeric_limits<double>::lowest();
+  _true_shower_E_dep_fiducial = stf::numeric_limits<double>::lowest();
 
   _nu_matched_tracks = std::numeric_limits<int>::lowest();
   _nu_matched_showers = std::numeric_limits<int>::lowest();
@@ -631,6 +679,14 @@ void lee::PandoraLEEAnalyzer::analyze(art::Event const &evt) {
         _nu_daughters_endx.push_back(mcparticle.EndX());
         _nu_daughters_endy.push_back(mcparticle.EndY());
         _nu_daughters_endz.push_back(mcparticle.EndZ());
+      	
+	if (mcparticle.PdgCode() == 11)
+	{
+	   std::vector<double> energy_dep = {0.0, 0.0};
+	   get_true_energy_dep_daughters(mcparticle, energy_dep);
+	   _true_shower_E_dep = energy_dep.at(0);
+	   _true_shower_E_dep_fiducial = energy_dep.at(1);
+	}
       }
     }
 
