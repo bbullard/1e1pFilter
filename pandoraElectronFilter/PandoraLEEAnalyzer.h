@@ -139,9 +139,9 @@ private:
   double _true_vx_sce;
   double _true_vy_sce;
   double _true_vz_sce;
-  
-  double _true_shower_E_dep;
-  double _true_shower_E_dep_fiducial
+
+  double _true_shower_E_dep;                                                                
+  double _true_shower_E_dep_fiducial;
 
   int _nu_matched_tracks;
   int _nu_matched_showers;
@@ -249,8 +249,7 @@ private:
   get_longest_track(std::vector<art::Ptr<recob::Track>> &tracks);
   art::Ptr<recob::Shower>
   get_most_energetic_shower(std::vector<art::Ptr<recob::Shower>> &showers);
-  void get_true_energy_dep_daughters(simb::MCParticle, std::vector<double>& energy_dep);
-
+  void get_true_energy_dep_daughters(const simb::MCTruth& gen, const simb::MCParticle& mcparticle, std::vector<double>& energy_dep);
   /**
   * @brief Determines if a PFParticle is matched with a MCParticle coming from
   * a neutrino interaction or a cosmic ray
